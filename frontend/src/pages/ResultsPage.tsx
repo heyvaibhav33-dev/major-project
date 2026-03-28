@@ -1,7 +1,8 @@
-import { useEffect, useState, useRef, useMemo } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, useMotionValue, useTransform, animate } from "framer-motion";
 import { Trophy, RotateCcw, Sparkles } from "lucide-react";
+import ReactMarkdown from "react-markdown";
 import { useInterview } from "../context/InterviewContext";
 import { getAnalysisStream } from "../lib/api";
 
@@ -136,85 +137,52 @@ function ScoreGauge({ score100 }: { score100: number }) {
   );
 }
 
-/* ─── Streaming Markdown-like renderer ─── */
-function StreamingText({ text }: { text: string }) {
-  const rendered = useMemo(() => {
-    const lines = text.split("\n");
-    return lines.map((line, i) => {
-      const trimmed = line.trim();
-
-      // ## Headers
-      if (trimmed.startsWith("## ")) {
-        const headerText = trimmed.slice(3);
-        let color = "#e2e8f0";
-        if (headerText.toLowerCase().includes("strength")) color = "#10b981";
-        else if (headerText.toLowerCase().includes("weakness")) color = "#ef4444";
-        else if (headerText.toLowerCase().includes("improve")) color = "#f59e0b";
-        else if (headerText.toLowerCase().includes("question") || headerText.toLowerCase().includes("breakdown")) color = "#06b6d4";
-
-        return (
-          <h3 key={i} className="font-display font-bold text-lg mt-6 mb-3 flex items-center gap-2"
-            style={{ color }}>
-            <div className="w-1.5 h-5 rounded-full" style={{ background: color }} />
-            {headerText}
-          </h3>
-        );
-      }
-
-      // **Bold** lines (question headers)
-      if (trimmed.startsWith("**Q:") || trimmed.startsWith("**")) {
-        const boldText = trimmed.replace(/\*\*/g, "");
-        return (
-          <p key={i} className="font-display font-semibold text-nexus-text mt-4 mb-1 text-sm">
-            {boldText}
-          </p>
-        );
-      }
-
-      // Score: X/10 lines
-      if (trimmed.startsWith("Score:")) {
-        const match = trimmed.match(/(\d+)\/10/);
-        const score = match ? parseInt(match[1]) : 5;
-        const color = score >= 7 ? "#10b981" : score >= 4 ? "#f59e0b" : "#ef4444";
-        return (
-          <div key={i} className="flex items-center gap-2 my-1">
-            <span className="text-xs text-nexus-muted">Score:</span>
-            <div className="flex gap-0.5">
-              {[...Array(10)].map((_, j) => (
-                <div key={j} className="w-3 h-2 rounded-sm transition-all duration-300"
-                  style={{ background: j < score ? color : "#1e3a5f" }} />
-              ))}
-            </div>
-            <span className="text-xs font-bold font-display" style={{ color }}>{score}/10</span>
-          </div>
-        );
-      }
-
-      // - Bullet points
-      if (trimmed.startsWith("- ")) {
-        return (
-          <div key={i} className="flex gap-2 my-1.5 ml-2">
-            <span className="text-nexus-cyan mt-1.5 text-[6px]">●</span>
-            <span className="text-sm text-nexus-text/85 leading-relaxed">{trimmed.slice(2)}</span>
-          </div>
-        );
-      }
-
-      // --- Dividers
-      if (trimmed === "---") {
-        return <hr key={i} className="border-nexus-border/30 my-4" />;
-      }
-
-      // Regular text
-      if (trimmed) {
-        return <p key={i} className="text-sm text-nexus-text/70 leading-relaxed my-0.5">{trimmed}</p>;
-      }
-
-      return <div key={i} className="h-1" />;
-    });
-  }, [text]);
-
-  return <div>{rendered}</div>;
+/* ─── Styled Markdown Renderer for streaming ─── */
+function StreamingMarkdown({ text }: { text: string }) {
+  return (
+    <ReactMarkdown
+      components={{
+        h2: ({ children }) => {
+          const str = String(children).toLowerCase();
+          let color = "#e2e8f0";
+          if (str.includes("strength")) color = "#10b981";
+          else if (str.includes("weakness")) color = "#ef4444";
+          else if (str.includes("improve")) color = "#f59e0b";
+          else if (str.includes("question") || str.includes("breakdown")) color = "#06b6d4";
+          return (
+            <h2 className="font-display font-bold text-lg mt-6 mb-3 flex items-center gap-2" style={{ color }}>
+              <div className="w-1.5 h-5 rounded-full" style={{ background: color }} />
+              {children}
+            </h2>
+          );
+        },
+        h3: ({ children }) => (
+          <h3 className="font-display font-semibold text-base mt-4 mb-2 text-nexus-text">{children}</h3>
+        ),
+        p: ({ children }) => (
+          <p className="text-sm text-nexus-text/80 leading-relaxed my-1.5">{children}</p>
+        ),
+        strong: ({ children }) => (
+          <strong className="font-display font-semibold text-nexus-text">{children}</strong>
+        ),
+        ul: ({ children }) => (
+          <ul className="space-y-1.5 my-2 ml-1">{children}</ul>
+        ),
+        li: ({ children }) => (
+          <li className="flex gap-2 text-sm text-nexus-text/85 leading-relaxed">
+            <span className="text-nexus-cyan mt-1.5 text-[6px] shrink-0">●</span>
+            <span>{children}</span>
+          </li>
+        ),
+        hr: () => <hr className="border-nexus-border/30 my-5" />,
+        em: ({ children }) => (
+          <em className="text-nexus-muted not-italic text-xs">{children}</em>
+        ),
+      }}
+    >
+      {text}
+    </ReactMarkdown>
+  );
 }
 
 /* ─── Main Results Page ─── */
@@ -378,7 +346,7 @@ export default function ResultsPage() {
           </div>
 
           <div ref={streamRef} className="max-h-[60vh] overflow-y-auto pr-2">
-            <StreamingText text={streamedText} />
+            <StreamingMarkdown text={streamedText} />
             {!isDone && streamedText && (
               <span className="inline-block w-0.5 h-4 bg-nexus-cyan animate-pulse ml-0.5" />
             )}

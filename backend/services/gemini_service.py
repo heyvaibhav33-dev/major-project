@@ -36,12 +36,15 @@ Create a comprehensive interview plan. Respond with ONLY valid JSON (no markdown
 
 Rules:
 - Generate exactly 8 questions
-- Questions MUST be specific to THIS candidate's resume — reference their actual projects, skills, companies
-- Mix: 1 ice-breaker, 3 technical (about their specific tech stack), 2 behavioral, 1 project deep-dive, 1 situational
-- For freshers: focus more on projects and learning, less on leadership
-- For experienced: focus on impact, architecture decisions, team dynamics
-- Each question should test something different
-- Include follow-up prompts for when answers are weak/vague"""
+- Questions MUST be specific to THIS candidate's resume — reference their actual projects, skills, companies, tech stack BY NAME
+- Mix: 1 ice-breaker, 4 technical (about their specific tech stack and projects), 1 behavioral, 1 project deep-dive, 1 situational
+- Technical questions should test REAL understanding, not surface-level: ask about architecture choices, trade-offs, debugging, scaling, edge cases
+- For freshers: ask them to explain HOW they built their projects, not just what. Ask about specific technical decisions, challenges, and what they'd do differently
+- For experienced: focus on system design trade-offs, architecture decisions, production incidents, mentoring
+- Each question should test something DIFFERENT — don't ask generic questions like "tell me about yourself" or "what are your strengths"
+- The follow_up_if_weak should be a tough but fair probe: "Can you walk me through the actual code?", "What specific error did you encounter?", "How would you handle X edge case?"
+- Questions should feel like they come from someone who has actually READ the resume deeply, not generic interview templates
+- The first_message should be brief and professional, not overly enthusiastic"""
 
     try:
         response = model.generate_content(prompt)
