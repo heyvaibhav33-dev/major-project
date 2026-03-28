@@ -11,40 +11,65 @@ model = genai.GenerativeModel("gemini-2.5-flash")
 def generate_interview_plan(resume_text: str) -> dict:
     """Analyze the resume and create a tailored interview plan with specific questions."""
 
-    prompt = f"""You are a senior technical recruiter. Analyze this resume and create a personalized interview plan.
+    prompt = f"""You are a senior technical interviewer at a top tech company. Analyze this resume and create a rigorous, personalized interview plan.
 
 RESUME:
 {resume_text[:3000]}
+
+First, identify what domain/role this candidate is targeting based on their resume (e.g., frontend dev, backend dev, ML engineer, data scientist, full-stack, mobile dev, DevOps, etc.). Then assume the role of a senior interviewer FOR THAT SPECIFIC DOMAIN and generate questions accordingly.
 
 Create a comprehensive interview plan. Respond with ONLY valid JSON (no markdown, no code blocks):
 {{
   "candidate_summary": "Brief 2-line summary of who this candidate is",
   "target_role": "What role they seem to be targeting",
+  "interviewer_role": "The senior role you are assuming (e.g., Senior ML Engineer, Staff Frontend Engineer, etc.)",
   "experience_level": "fresher/junior/mid/senior",
   "key_areas_to_probe": ["area1", "area2", "area3"],
   "questions": [
     {{
-      "category": "ice-breaker/technical/behavioral/project-deep-dive/situational",
+      "category": "conceptual/technical-deep-dive/project-specific/system-design/behavioral/coding-logic/situational",
       "question": "The specific question to ask",
+      "expected_good_answer": "Brief notes on what a strong answer would cover",
       "why": "Why this question matters for this candidate",
-      "follow_up_if_weak": "What to ask if they give a vague answer"
+      "follow_up_if_weak": "Specific technical follow-up if they give a vague answer"
     }}
   ],
   "red_flags_to_watch": ["red flag 1", "red flag 2"],
-  "first_message": "A warm, personalized opening message that references something specific from their resume"
+  "first_message": "Brief professional opening that shows you've read their resume"
 }}
 
-Rules:
-- Generate exactly 8 questions
-- Questions MUST be specific to THIS candidate's resume — reference their actual projects, skills, companies, tech stack BY NAME
-- Mix: 1 ice-breaker, 4 technical (about their specific tech stack and projects), 1 behavioral, 1 project deep-dive, 1 situational
-- Technical questions should test REAL understanding, not surface-level: ask about architecture choices, trade-offs, debugging, scaling, edge cases
-- For freshers: ask them to explain HOW they built their projects, not just what. Ask about specific technical decisions, challenges, and what they'd do differently
-- For experienced: focus on system design trade-offs, architecture decisions, production incidents, mentoring
-- Each question should test something DIFFERENT — don't ask generic questions like "tell me about yourself" or "what are your strengths"
-- The follow_up_if_weak should be a tough but fair probe: "Can you walk me through the actual code?", "What specific error did you encounter?", "How would you handle X edge case?"
-- Questions should feel like they come from someone who has actually READ the resume deeply, not generic interview templates
-- The first_message should be brief and professional, not overly enthusiastic"""
+QUESTION GENERATION RULES:
+
+1. CONCEPTUAL QUESTIONS (2-3): Ask specific CS/domain fundamentals based on their listed skills.
+   Examples by domain:
+   - Python dev: "What's the difference between a list and a tuple? When would you choose one over the other?"
+   - React dev: "Explain the difference between useEffect and useLayoutEffect. When would you use each?"
+   - ML engineer: "Explain overfitting. How would you detect it and what techniques prevent it?"
+   - Java dev: "What's the difference between an abstract class and an interface in Java? Give a real scenario for each."
+   - Node.js dev: "Explain the event loop. What happens when you have a CPU-intensive task?"
+   - Database: "What's the difference between SQL and NoSQL? When would you pick MongoDB over PostgreSQL?"
+   Pick concepts SPECIFIC to the technologies listed on THEIR resume.
+
+2. PROJECT-SPECIFIC QUESTIONS (2-3): Drill into their actual projects.
+   - "In your [specific project name], how did you handle [specific technical challenge related to that project]?"
+   - "You used [specific technology] in [project] — why that choice over [alternative]?"
+   - "Walk me through the architecture of [their project]. How does data flow from frontend to database?"
+
+3. CODING LOGIC (1): Ask a verbal coding/logic question.
+   - "How would you find duplicates in an array? What's the time complexity?"
+   - "If you had to design the database schema for your [project], what tables/collections would you need?"
+   - "How would you implement pagination in an API? What are the tradeoffs between offset vs cursor?"
+
+4. SYSTEM DESIGN / SITUATIONAL (1):
+   - "If your [project] suddenly had 100x more users, what would break first and how would you fix it?"
+   - "How would you deploy your [project] to production? Walk me through the steps."
+
+5. BEHAVIORAL (1):
+   - Keep it specific to their experience, not generic "tell me about a time..."
+
+Generate exactly 8 questions total following the mix above.
+Questions must reference their ACTUAL skills, projects, and technologies by name.
+The first_message should be brief and professional — NOT enthusiastic or cheerful."""
 
     try:
         response = model.generate_content(prompt)

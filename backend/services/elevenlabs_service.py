@@ -21,14 +21,17 @@ def create_interview_agent(interview_plan: dict) -> str:
         questions_text += f"""
 Question {i} ({q.get('category', 'general')}):
 Ask: "{q.get('question', '')}"
+What a GOOD answer covers: {q.get('expected_good_answer', 'Specific details with examples')}
 Why this matters: {q.get('why', '')}
-If they give a weak/vague answer, follow up with: "{q.get('follow_up_if_weak', 'Can you elaborate?')}"
+If they give a weak/vague answer, push back with: "{q.get('follow_up_if_weak', 'Can you elaborate?')}"
 """
 
     red_flags = "\n".join(f"- {rf}" for rf in interview_plan.get("red_flags_to_watch", []))
     areas = ", ".join(interview_plan.get("key_areas_to_probe", []))
 
-    system_prompt = f"""You are a sharp, experienced senior technical interviewer at a top tech company. You are conducting a rigorous mock interview to genuinely test this candidate.
+    interviewer_role = interview_plan.get("interviewer_role", "Senior Technical Interviewer")
+
+    system_prompt = f"""You are a {interviewer_role} at a top tech company. You are conducting a rigorous mock interview to genuinely test this candidate's technical knowledge.
 
 CANDIDATE PROFILE:
 {interview_plan.get('candidate_summary', 'A candidate')}
