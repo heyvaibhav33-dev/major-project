@@ -1,13 +1,20 @@
 import { useState, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Upload, FileText, ArrowRight, Sparkles, Zap, Brain } from "lucide-react";
+import { Upload, FileText, ArrowRight, Sparkles, Video, Brain, History as HistoryIcon, LogOut } from "lucide-react";
 import { useInterview } from "../context/InterviewContext";
+import { useAuth } from "../context/AuthContext";
 import { uploadResume } from "../lib/api";
 
 export default function LandingPage() {
   const navigate = useNavigate();
   const { setResumeText, setResumeName, resumeText, resumeName } = useInterview();
+  const { user, signOut } = useAuth();
+
+  const handleSignOut = async () => {
+    await signOut();
+    navigate("/login");
+  };
   const [isDragging, setIsDragging] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState("");
@@ -48,6 +55,29 @@ export default function LandingPage() {
       <div className="orb orb-cyan w-[500px] h-[500px] -top-40 -right-40 animate-float" />
       <div className="orb orb-violet w-[400px] h-[400px] bottom-20 -left-40 animate-float" style={{ animationDelay: "3s" }} />
 
+      {/* Top bar */}
+      <motion.div
+        initial={{ opacity: 0, y: -10 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="absolute top-0 right-0 z-20 p-5 flex items-center gap-3"
+      >
+        <span className="text-xs text-nexus-muted hidden sm:block">{user?.email}</span>
+        <Link
+          to="/history"
+          className="flex items-center gap-1.5 px-3 py-2 rounded-lg glass text-sm text-nexus-violet hover:bg-nexus-violet/10 transition-all"
+        >
+          <HistoryIcon size={14} />
+          History
+        </Link>
+        <button
+          onClick={handleSignOut}
+          className="flex items-center gap-1.5 px-3 py-2 rounded-lg glass text-sm text-nexus-muted hover:text-nexus-red transition-all"
+          title="Sign out"
+        >
+          <LogOut size={14} />
+        </button>
+      </motion.div>
+
       <div className="relative z-10 min-h-screen flex flex-col items-center justify-center px-6">
         {/* Logo & Title */}
         <motion.div
@@ -70,9 +100,9 @@ export default function LandingPage() {
             <span className="gradient-text">NEXUS</span>
           </h1>
           <p className="font-display text-xl md:text-2xl text-nexus-muted max-w-xl mx-auto leading-relaxed">
-            Upload your resume. Practice with AI.
+            Upload your resume. Talk to a live AI interviewer.
             <br />
-            <span className="text-nexus-text">Ace your next interview.</span>
+            <span className="text-nexus-text">Get scored and improve.</span>
           </p>
         </motion.div>
 
@@ -84,9 +114,9 @@ export default function LandingPage() {
           transition={{ delay: 0.5 }}
         >
           {[
-            { icon: Brain, label: "AI Interviewer", desc: "Gemini-powered questions" },
-            { icon: Zap, label: "Voice Interaction", desc: "Natural conversation" },
-            { icon: Sparkles, label: "Smart Analysis", desc: "Detailed feedback" },
+            { icon: Brain, label: "AI Interviewer", desc: "Tailored to your resume" },
+            { icon: Video, label: "Live Video Avatar", desc: "Real face-to-face practice" },
+            { icon: Sparkles, label: "Smart Analysis", desc: "Detailed feedback /10" },
           ].map((feat, i) => (
             <div key={i} className="glass rounded-xl px-5 py-4 text-center w-44">
               <feat.icon className="mx-auto mb-2 text-nexus-cyan" size={22} />

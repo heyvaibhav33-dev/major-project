@@ -1,10 +1,12 @@
 import { useEffect, useState, useRef } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { motion, useMotionValue, useTransform, animate } from "framer-motion";
-import { Trophy, RotateCcw, Sparkles } from "lucide-react";
+import { Trophy, RotateCcw, Sparkles, History as HistoryIcon, CheckCircle2, MessageSquare, ChevronDown, ChevronUp, Copy, Check } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { useInterview } from "../context/InterviewContext";
+import { useAuth } from "../context/AuthContext";
 import { getAnalysisStream } from "../lib/api";
+import { supabase } from "../lib/supabase";
 
 /* ─── Animated Counter ─── */
 function AnimatedNumber({ value, duration = 1.5 }: { value: number; duration?: number }) {
@@ -37,11 +39,15 @@ function ScoreGauge({ score100 }: { score100: number }) {
   const bgEndY = cy - r * Math.sin(0);
   const bgPath = `M ${bgStartX} ${bgStartY} A ${r} ${r} 0 0 1 ${bgEndX} ${bgEndY}`;
 
+  // Arc never exceeds 180°, so the SVG large-arc flag must stay 0 — otherwise
+  // the path takes the long way around and bleeds into the bottom of the circle.
   const activeAngle = startAngle - totalAngle * percentage;
   const activeEndX = cx + r * Math.cos(activeAngle);
   const activeEndY = cy - r * Math.sin(activeAngle);
-  const largeArc = percentage > 0.5 ? 1 : 0;
-  const activePath = `M ${bgStartX} ${bgStartY} A ${r} ${r} 0 ${largeArc} 1 ${activeEndX} ${activeEndY}`;
+  const activePath =
+    percentage <= 0
+      ? ""
+      : `M ${bgStartX} ${bgStartY} A ${r} ${r} 0 0 1 ${activeEndX} ${activeEndY}`;
 
   const needleLen = r - 15;
 
@@ -188,7 +194,8 @@ function StreamingMarkdown({ text }: { text: string }) {
 /* ─── Main Results Page ─── */
 export default function ResultsPage() {
   const navigate = useNavigate();
-  const { sessionId, agentId, reset } = useInterview();
+  const { conversationId, reset, resumeText, planSummary } = useInterview();
+  const { user } = useAuth();
 
   const [score, setScore] = useState<number | null>(null);
   const [streamedText, setStreamedText] = useState("");
@@ -196,9 +203,18 @@ export default function ResultsPage() {
   const [isDone, setIsDone] = useState(false);
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(true);
+  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [saveError, setSaveError] = useState("");
+  const [transcript, setTranscript] = useState("");
+  const [transcriptOpen, setTranscriptOpen] = useState(true);
+  const [copied, setCopied] = useState(false);
 
   const hasFetched = useRef(false);
+  const hasSaved = useRef(false);
   const streamRef = useRef<HTMLDivElement>(null);
+  const finalScoreRef = useRef<number | null>(null);
+  const finalTextRef = useRef<string>("");
+  const transcriptRef = useRef<string>("");
 
   // Auto-scroll as text streams in
   useEffect(() => {
@@ -208,8 +224,8 @@ export default function ResultsPage() {
   }, [streamedText]);
 
   useEffect(() => {
-    if (!sessionId || !agentId || hasFetched.current) {
-      if (!sessionId || !agentId) {
+    if (!conversationId || hasFetched.current) {
+      if (!conversationId) {
         setIsLoading(false);
         setError("No interview data found. Please start an interview first.");
       }
@@ -217,19 +233,28 @@ export default function ResultsPage() {
     }
     hasFetched.current = true;
 
-    getAnalysisStream(agentId, sessionId, {
+    getAnalysisStream(conversationId, {
       onScore: (s) => {
         setScore(s);
+        finalScoreRef.current = s;
         setIsLoading(false);
       },
       onToken: (text) => {
-        setStreamedText((prev) => prev + text);
+        setStreamedText((prev) => {
+          const next = prev + text;
+          finalTextRef.current = next;
+          return next;
+        });
       },
       onStructured: () => {
         // Structured data received — could use for enhanced UI later
       },
       onStatus: (msg) => {
         setStatusMsg(msg);
+      },
+      onTranscript: (t) => {
+        transcriptRef.current = t;
+        setTranscript(t);
       },
       onDone: () => {
         setIsDone(true);
@@ -242,7 +267,36 @@ export default function ResultsPage() {
       setError(e.message || "Failed to analyze");
       setIsLoading(false);
     });
-  }, [sessionId, agentId]);
+  }, [conversationId]);
+
+  // Persist to Supabase once analysis is fully streamed
+  useEffect(() => {
+    if (!isDone || hasSaved.current || !user) return;
+    if (!finalTextRef.current) return;
+    hasSaved.current = true;
+
+    const transcript = transcriptRef.current;
+    setSaveState("saving");
+
+    (async () => {
+      const { error: err } = await supabase.from("interview_history").insert({
+        user_id: user.id,
+        target_role: planSummary?.target_role ?? null,
+        experience_level: planSummary?.experience_level ?? null,
+        candidate_summary: planSummary?.candidate_summary ?? null,
+        overall_score: finalScoreRef.current,
+        transcript,
+        analysis_markdown: finalTextRef.current,
+        resume_text: resumeText || null,
+      });
+      if (err) {
+        setSaveState("error");
+        setSaveError(err.message);
+      } else {
+        setSaveState("saved");
+      }
+    })();
+  }, [isDone, user, planSummary, resumeText]);
 
   const handleTryAgain = () => {
     reset();
@@ -353,25 +407,135 @@ export default function ResultsPage() {
           </div>
         </motion.div>
 
-        {/* Try again */}
+        {/* Conversation transcript */}
+        {transcript && (
+          <motion.div
+            className="glass rounded-2xl p-6 md:p-8 relative overflow-hidden mt-6"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.5 }}
+          >
+            <div className="flex items-center gap-2 mb-3">
+              <MessageSquare size={16} className="text-nexus-violet" />
+              <h2 className="font-display font-bold text-nexus-text">Conversation Transcript</h2>
+              <span className="ml-2 text-[10px] uppercase tracking-wider text-nexus-muted">
+                {transcript.split("\n").filter((l) => l.trim()).length} turns
+              </span>
+              <div className="ml-auto flex items-center gap-2">
+                <button
+                  onClick={async () => {
+                    await navigator.clipboard.writeText(transcript);
+                    setCopied(true);
+                    setTimeout(() => setCopied(false), 1800);
+                  }}
+                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs text-nexus-muted hover:text-nexus-cyan hover:bg-nexus-cyan/10 transition-all"
+                >
+                  {copied ? <Check size={12} /> : <Copy size={12} />}
+                  {copied ? "Copied" : "Copy"}
+                </button>
+                <button
+                  onClick={() => setTranscriptOpen((v) => !v)}
+                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs text-nexus-muted hover:text-nexus-violet hover:bg-nexus-violet/10 transition-all"
+                >
+                  {transcriptOpen ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                  {transcriptOpen ? "Collapse" : "Expand"}
+                </button>
+              </div>
+            </div>
+
+            {transcriptOpen && (
+              <div className="max-h-[50vh] overflow-y-auto pr-2 space-y-2.5">
+                {transcript
+                  .split("\n")
+                  .filter((line) => line.trim())
+                  .map((line, i) => {
+                    const isAgent = line.startsWith("Interviewer:");
+                    const isUser = line.startsWith("Candidate:");
+                    const text = line.replace(/^(Interviewer:|Candidate:)\s*/, "");
+                    if (!isAgent && !isUser) {
+                      return (
+                        <p key={i} className="text-xs text-nexus-muted/70 italic">
+                          {line}
+                        </p>
+                      );
+                    }
+                    return (
+                      <div
+                        key={i}
+                        className={`flex ${isUser ? "justify-end" : "justify-start"}`}
+                      >
+                        <div
+                          className={`max-w-[85%] rounded-xl px-3.5 py-2.5 ${
+                            isAgent
+                              ? "bg-nexus-cyan/8 border border-nexus-cyan/20"
+                              : "bg-nexus-violet/8 border border-nexus-violet/20"
+                          }`}
+                        >
+                          <div
+                            className={`text-[10px] uppercase tracking-wider font-display font-semibold mb-1 ${
+                              isAgent ? "text-nexus-cyan" : "text-nexus-violet"
+                            }`}
+                          >
+                            {isAgent ? "Interviewer" : "You"}
+                          </div>
+                          <p className="text-sm text-nexus-text/90 leading-relaxed whitespace-pre-wrap">
+                            {text}
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  })}
+              </div>
+            )}
+          </motion.div>
+        )}
+
+        {/* Try again + history + save status */}
         {isDone && (
           <motion.div
-            className="mt-10 text-center pb-10"
+            className="mt-10 text-center pb-10 flex flex-col items-center gap-4"
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.5 }}
           >
-            <motion.button
-              onClick={handleTryAgain}
-              className="px-10 py-4 rounded-2xl bg-gradient-to-r from-nexus-cyan to-nexus-violet
-                font-display font-bold text-white inline-flex items-center gap-2.5
-                hover:shadow-xl hover:shadow-nexus-cyan/20 transition-all text-lg"
-              whileHover={{ scale: 1.03, y: -2 }}
-              whileTap={{ scale: 0.97 }}
-            >
-              <RotateCcw size={20} />
-              Try Again
-            </motion.button>
+            {saveState === "saving" && (
+              <p className="text-xs text-nexus-muted flex items-center gap-2">
+                <span className="w-3 h-3 border-2 border-nexus-cyan border-t-transparent rounded-full animate-spin" />
+                Saving to your history...
+              </p>
+            )}
+            {saveState === "saved" && (
+              <p className="text-xs text-nexus-green flex items-center gap-1.5">
+                <CheckCircle2 size={12} />
+                Saved to your history
+              </p>
+            )}
+            {saveState === "error" && (
+              <p className="text-xs text-nexus-red">Couldn't save: {saveError}</p>
+            )}
+
+            <div className="flex gap-3 flex-wrap justify-center">
+              <motion.button
+                onClick={handleTryAgain}
+                className="px-8 py-4 rounded-2xl bg-gradient-to-r from-nexus-cyan to-nexus-violet
+                  font-display font-bold text-white inline-flex items-center gap-2.5
+                  hover:shadow-xl hover:shadow-nexus-cyan/20 transition-all"
+                whileHover={{ scale: 1.03, y: -2 }}
+                whileTap={{ scale: 0.97 }}
+              >
+                <RotateCcw size={18} />
+                Try Again
+              </motion.button>
+
+              <Link
+                to="/history"
+                className="px-8 py-4 rounded-2xl glass border border-nexus-violet/30 text-nexus-violet
+                  font-display font-bold inline-flex items-center gap-2.5 hover:bg-nexus-violet/10 transition-all"
+              >
+                <HistoryIcon size={18} />
+                View History
+              </Link>
+            </div>
           </motion.div>
         )}
       </div>

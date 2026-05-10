@@ -1,5 +1,5 @@
 // NEXUS Interview API client
-const API_BASE = "http://localhost:8002";
+const API_BASE = (import.meta.env.VITE_API_BASE as string | undefined) ?? "http://localhost:8002";
 
 export async function uploadResume(file: File): Promise<{ text: string; name: string }> {
   const formData = new FormData();
@@ -12,11 +12,19 @@ export async function uploadResume(file: File): Promise<{ text: string; name: st
   return res.json();
 }
 
-export async function startInterview(resumeText: string): Promise<{
-  agent_id: string;
-  signed_url: string;
+export interface StartInterviewResponse {
+  conversation_id: string;
+  conversation_url: string;
+  plan_summary?: {
+    target_role: string;
+    experience_level: string;
+    candidate_summary: string;
+    question_count: number;
+  };
   error?: string;
-}> {
+}
+
+export async function startInterview(resumeText: string): Promise<StartInterviewResponse> {
   const res = await fetch(`${API_BASE}/api/start-interview`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -24,6 +32,18 @@ export async function startInterview(resumeText: string): Promise<{
   });
   if (!res.ok) throw new Error("Failed to start interview");
   return res.json();
+}
+
+export async function endInterview(conversationId: string): Promise<void> {
+  try {
+    await fetch(`${API_BASE}/api/end-interview`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ conversation_id: conversationId }),
+    });
+  } catch {
+    // best-effort cleanup; analyze flow also ends the conversation
+  }
 }
 
 // SSE stream helper
@@ -59,7 +79,9 @@ async function consumeSSE(
         try {
           const data = JSON.parse(trimmed.slice(6));
           onEvent(data);
-        } catch {}
+        } catch {
+          /* ignore unparseable */
+        }
       }
     }
   }
@@ -68,7 +90,9 @@ async function consumeSSE(
     try {
       const data = JSON.parse(buffer.trim().slice(6));
       onEvent(data);
-    } catch {}
+    } catch {
+      /* ignore */
+    }
   }
 }
 
@@ -91,16 +115,16 @@ export interface AnalysisCallbacks {
   onToken: (text: string) => void;
   onStructured: (data: StructuredData) => void;
   onStatus: (message: string) => void;
+  onTranscript?: (transcript: string) => void;
   onDone: () => void;
   onError?: (message: string) => void;
 }
 
 export async function getAnalysisStream(
-  agentId: string,
   conversationId: string,
   callbacks: AnalysisCallbacks
 ): Promise<void> {
-  await consumeSSE(`${API_BASE}/api/analyze`, { agent_id: agentId, conversation_id: conversationId }, (event) => {
+  await consumeSSE(`${API_BASE}/api/analyze`, { conversation_id: conversationId }, (event) => {
     switch (event.type) {
       case "score": {
         const data = event.data as { overall_score: number };
@@ -119,6 +143,11 @@ export async function getAnalysisStream(
       case "status": {
         const data = event.data as { message: string };
         callbacks.onStatus(data.message);
+        break;
+      }
+      case "transcript": {
+        const data = event.data as { transcript: string };
+        callbacks.onTranscript?.(data.transcript);
         break;
       }
       case "done":

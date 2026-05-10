@@ -1,7 +1,22 @@
 node_modules/
 dist/
 .env
+.env.local
+.env.*.local
 __pycache__/
 *.pyc
 .vite/
 test_resume.pdf
+
+# Local secrets — never commit
+db.txt
+nexus.txt
+infra.txt
+.mcp.json
+
+# Local-only state and ephemeral artifacts
+.claude/
+.tmp_screenshots/
+.qodo/
+.vercel/
+scripts/run_migration.py

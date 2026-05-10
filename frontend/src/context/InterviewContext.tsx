@@ -1,14 +1,31 @@
-import { createContext, useContext, useState, ReactNode } from "react";
+import { createContext, useContext, useState } from "react";
+import type { ReactNode } from "react";
+
+export interface PlanSummary {
+  target_role: string;
+  experience_level: string;
+  candidate_summary: string;
+  question_count: number;
+}
+
+export interface ChatTurn {
+  role: "agent" | "user";
+  text: string;
+}
 
 interface InterviewState {
   resumeText: string;
   resumeName: string;
-  sessionId: string; // conversationId from ElevenLabs
-  agentId: string;
+  conversationId: string;
+  conversationUrl: string;
+  planSummary: PlanSummary | null;
+  chatHistory: ChatTurn[];
   setResumeText: (text: string) => void;
   setResumeName: (name: string) => void;
-  setSessionId: (id: string) => void;
-  setAgentId: (id: string) => void;
+  setConversationId: (id: string) => void;
+  setConversationUrl: (url: string) => void;
+  setPlanSummary: (p: PlanSummary | null) => void;
+  setChatHistory: (h: ChatTurn[] | ((prev: ChatTurn[]) => ChatTurn[])) => void;
   reset: () => void;
 }
 
@@ -17,21 +34,36 @@ const InterviewContext = createContext<InterviewState | null>(null);
 export function InterviewProvider({ children }: { children: ReactNode }) {
   const [resumeText, setResumeText] = useState("");
   const [resumeName, setResumeName] = useState("");
-  const [sessionId, setSessionId] = useState("");
-  const [agentId, setAgentId] = useState("");
+  const [conversationId, setConversationId] = useState("");
+  const [conversationUrl, setConversationUrl] = useState("");
+  const [planSummary, setPlanSummary] = useState<PlanSummary | null>(null);
+  const [chatHistory, setChatHistory] = useState<ChatTurn[]>([]);
 
   const reset = () => {
     setResumeText("");
     setResumeName("");
-    setSessionId("");
-    setAgentId("");
+    setConversationId("");
+    setConversationUrl("");
+    setPlanSummary(null);
+    setChatHistory([]);
   };
 
   return (
     <InterviewContext.Provider
       value={{
-        resumeText, resumeName, sessionId, agentId,
-        setResumeText, setResumeName, setSessionId, setAgentId, reset,
+        resumeText,
+        resumeName,
+        conversationId,
+        conversationUrl,
+        planSummary,
+        chatHistory,
+        setResumeText,
+        setResumeName,
+        setConversationId,
+        setConversationUrl,
+        setPlanSummary,
+        setChatHistory,
+        reset,
       }}
     >
       {children}
